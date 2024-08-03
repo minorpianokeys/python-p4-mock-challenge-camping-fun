@@ -12,6 +12,7 @@ DATABASE = os.environ.get(
 
 
 app = Flask(__name__)
+api = Api(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.json.compact = False
@@ -25,5 +26,100 @@ db.init_app(app)
 def home():
     return ''
 
+class Campers(Resource):
+
+    def get(self):
+        try:
+            campers = [camper.to_dict(only=("id", "name", "age")) for camper in Camper.query.all()]
+            return make_response(jsonify(campers), 200,)
+        except:
+            return {'error': 'Bad request'}, 400
+        
+    def post(self):
+        try:
+            new_camper = Camper(
+                name = request.json['name'],
+                age = request.json['age']
+            )
+            db.session.add(new_camper)
+            db.session.commit()
+
+            return new_camper.to_dict(only=("id", "name", "age")), 201
+        
+        except ValueError:
+            return {"errors": ["validation errors"]}, 400
+   
+api.add_resource(Campers, '/campers')
+
+class CampersByID(Resource):
+
+    def get(self, id):
+        try:
+            camper = Camper.query.filter_by(id=id).first().to_dict()
+            return make_response(jsonify(camper), 200,)
+        except:
+            return {"error": "Camper not found"}, 404
+        
+    def patch(self, id):
+        try:
+            camper = Camper.query.filter_by(id=id).first()
+            if not camper:
+                return {"error": "Camper not found"}, 404
+            for attr in request.json:
+                setattr(camper, attr, request.json[attr])
+
+            db.session.add(camper)
+            db.session.commit()
+
+            return camper.to_dict(), 202
+        
+        except ValueError:
+            return {"errors": ["validation errors"]}, 400
+    
+api.add_resource(CampersByID, '/campers/<int:id>')
+
+class Activities(Resource):
+    
+    def get(self):
+        activities = [activity.to_dict(only=("id", "name", "difficulty")) for activity in Activity.query.all()]
+        return make_response(activities, 200)
+
+api.add_resource(Activities, '/activities')
+
+class ActivitiesByID(Resource):
+    
+    def delete(self, id):
+        activity = Activity.query.filter_by(id=id).first()
+        if activity:
+            db.session.delete(activity)
+            db.session.commit()
+            return {}, 204
+        
+        return {"error": "Activity not found"}, 404
+
+api.add_resource(ActivitiesByID, '/activities/<int:id>')
+
+class Signups(Resource):
+    def post(self):
+        try:
+            new_signup = Signup(
+                time = request.json['time'],
+                camper_id = request.json['camper_id'],
+                activity_id = request.json['activity_id']
+            )
+
+            db.session.add(new_signup)
+            db.session.commit()
+            return new_signup.to_dict(), 201
+        
+        except:
+            return { "errors": ["validation errors"] }, 400
+
+api.add_resource(Signups, '/signups')
+
+
+
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
+
+
